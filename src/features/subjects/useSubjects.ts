@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSQLiteContext } from 'expo-sqlite';
 
+import { useAppDatabase } from '@/src/lib/db';
 import type { SubjectRecord } from '@/src/lib/database';
 
 function makeSubjectId() {
@@ -8,7 +8,7 @@ function makeSubjectId() {
 }
 
 export function useSubjects() {
-  const db = useSQLiteContext();
+  const db = useAppDatabase();
   const [subjects, setSubjects] = useState<SubjectRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

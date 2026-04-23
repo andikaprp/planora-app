@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSQLiteContext } from 'expo-sqlite';
 
+import { useAppDatabase } from '@/src/lib/db';
 import type { TimetableSlotRecord } from '@/src/lib/database';
 
 export type TimetableSlot = TimetableSlotRecord & {
@@ -13,7 +13,7 @@ function makeSlotId() {
 }
 
 export function useTimetable() {
-  const db = useSQLiteContext();
+  const db = useAppDatabase();
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

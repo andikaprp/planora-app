@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSQLiteContext } from 'expo-sqlite';
 
+import { useAppDatabase } from '@/src/lib/db';
 import type { TodoRecord } from '@/src/lib/database';
 
 type TodoRow = TodoRecord & {
@@ -13,7 +13,7 @@ function makeTodoId() {
 }
 
 export function useTodos() {
-  const db = useSQLiteContext();
+  const db = useAppDatabase();
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

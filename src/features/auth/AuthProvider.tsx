@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import type { Session } from '@supabase/supabase-js';
 
 import { isSupabaseConfigured, supabase } from '@/src/lib/supabase';
+import { getStorageItem, setStorageItem } from '@/src/lib/storage';
 
 const onboardingStorageKey = 'planora.onboarding.complete';
 
@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     async function bootstrap() {
-      const onboardingValue = await SecureStore.getItemAsync(onboardingStorageKey);
+      const onboardingValue = await getStorageItem(onboardingStorageKey);
 
       if (!isMounted) {
         return;
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function completeOnboarding() {
-    await SecureStore.setItemAsync(onboardingStorageKey, 'true');
+    await setStorageItem(onboardingStorageKey, 'true');
     setHasCompletedOnboarding(true);
   }
 

@@ -1,26 +1,56 @@
-import { useState } from 'react';
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
-
-import { Text, View } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
+  PlanoraCard,
+  PlanoraDashboardHero,
+  PlanoraFilterPill,
+  PlanoraInput,
+  PlanoraPrimaryButton,
+  PlanoraSectionTitle,
+  planoraColors,
+  planoraDisplayName,
+  planoraHeadingFont,
+} from '@/src/components/planora-ui';
+import { useAuth } from '@/src/features/auth/AuthProvider';
+import { useFlashcards } from '@/src/features/flashcards/useFlashcards';
 import { useSubjects } from '@/src/features/subjects/useSubjects';
+import { confirmDestructive } from '@/src/lib/confirm';
 
-const SUBJECT_COLORS = ['#2563EB', '#F97316', '#0F766E', '#9333EA', '#DC2626', '#CA8A04'];
+const SUBJECT_COLORS = ['#217957', '#4AA57A', '#90C6AE', '#F7C66B', '#E8875A', '#A3C7F7'];
+const SUBJECT_EMOJIS = ['🧪', '📐', '🧠', '🇬🇧', '📚', '🧑‍🔬'];
 
 export default function SubjectsScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { session } = useAuth();
   const { subjects, isLoading, addSubject, removeSubject } = useSubjects();
+  const { cards, decks } = useFlashcards();
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState(SUBJECT_COLORS[0]);
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const displayName = planoraDisplayName(session?.user.email);
+  const selectedSubject =
+    subjects.find((subject) => subject.id === selectedSubjectId) ?? subjects[0] ?? null;
+  const heroCards = selectedSubject
+    ? cards.filter((card) => card.subjectId === selectedSubject.id)
+    : cards;
+  const heroDeck = selectedSubject
+    ? decks.find((deck) => deck.subjectId === selectedSubject.id) ?? null
+    : decks[0] ?? null;
+  const heroCard = heroCards[0] ?? cards[0] ?? null;
+
+  const subjectTiles = useMemo(
+    () =>
+      subjects.map((subject, index) => ({
+        ...subject,
+        emoji: SUBJECT_EMOJIS[index % SUBJECT_EMOJIS.length],
+      })),
+    [subjects]
+  );
 
   async function onCreateSubject() {
     if (!name.trim()) {
@@ -32,6 +62,10 @@ export default function SubjectsScreen() {
     try {
       await addSubject({ color: selectedColor, name });
       setName('');
+      setSelectedColor(
+        SUBJECT_COLORS[(SUBJECT_COLORS.indexOf(selectedColor) + 1) % SUBJECT_COLORS.length]
+      );
+      setIsComposerOpen(false);
     } catch (error) {
       Alert.alert('Could not save subject', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -39,123 +73,117 @@ export default function SubjectsScreen() {
     }
   }
 
-  function onDeleteSubject(id: string, subjectName: string) {
-    Alert.alert('Delete subject?', `Remove "${subjectName}" from your workspace?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await removeSubject(id);
-          } catch (error) {
-            Alert.alert(
-              'Could not delete subject',
-              error instanceof Error ? error.message : 'Unknown error'
-            );
-          }
-        },
-      },
-    ]);
+  async function onDeleteSubject(id: string, subjectName: string) {
+    const confirmed = await confirmDestructive({
+      title: 'Hapus pelajaran?',
+      message: `Pelajaran "${subjectName}" akan dihapus dari workspace kamu.`,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await removeSubject(id);
+      if (selectedSubjectId === id) {
+        setSelectedSubjectId(null);
+      }
+    } catch (error) {
+      Alert.alert('Could not delete subject', error instanceof Error ? error.message : 'Unknown error');
+    }
   }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>Subjects</Text>
-        <Text style={styles.title}>Build your class roster</Text>
-        <Text style={styles.subtitle}>
-          Start with the courses you care about, then we can connect tasks, schedules, and
-          flashcards to them.
-        </Text>
-      </View>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <PlanoraDashboardHero
+        actionLabel="Atur flashcard"
+        actionSecondaryLabel="Buka kartu"
+        cardCounter={heroDeck ? `1/${Math.max(heroDeck.cardCount, 1)}` : '0/0'}
+        cardWord={heroCard?.front ?? 'Yuk, tambah pelajaran pertamamu!'}
+        selectedSubjectId={selectedSubjectId}
+        subjectLabel={selectedSubject?.name ?? 'Belum ada pelajaran'}
+        subjects={subjects}
+        title={'Mau belajar apa\nhari ini?'}
+        userName={displayName}
+        onActionPress={() => router.push('/(tabs)/flashcards')}
+        onCardPress={() => router.push('/(tabs)/flashcards')}
+        onSelectSubject={setSelectedSubjectId}
+      />
 
-      <View
-        style={[
-          styles.formCard,
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)' },
-        ]}>
-        <Text style={styles.sectionTitle}>Add a subject</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Example: Biology"
-          placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-          style={[
-            styles.input,
-            {
-              color: isDark ? '#FFFFFF' : '#0F172A',
-              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-            },
-          ]}
+      <View style={styles.sectionWrap}>
+        <PlanoraSectionTitle
+          title="Pelajaran"
+          actionLabel={isComposerOpen ? 'Tutup' : 'Tambah'}
+          onActionPress={() => setIsComposerOpen((value) => !value)}
         />
 
-        <View style={styles.paletteRow}>
-          {SUBJECT_COLORS.map((color) => {
-            const isSelected = color === selectedColor;
-
-            return (
-              <Pressable
-                key={color}
-                onPress={() => setSelectedColor(color)}
-                style={[
-                  styles.colorChip,
-                  { backgroundColor: color },
-                  isSelected && styles.colorChipSelected,
-                ]}
-              />
-            );
-          })}
-        </View>
-
-        <Pressable
-          style={[styles.primaryButton, (!name.trim() || isSaving) && styles.buttonDisabled]}
-          disabled={!name.trim() || isSaving}
-          onPress={onCreateSubject}>
-          <Text style={styles.primaryButtonText}>
-            {isSaving ? 'Saving subject...' : 'Create subject'}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.listSection}>
-        <Text style={styles.sectionTitle}>Your subjects</Text>
-
         {isLoading ? (
-          <View style={styles.emptyCard}>
-            <ActivityIndicator size="small" color="#2563EB" />
-            <Text style={styles.emptyText}>Loading subjects...</Text>
-          </View>
+          <PlanoraCard style={styles.loadingCard}>
+            <ActivityIndicator size="small" color={planoraColors.aurora500} />
+            <Text style={styles.loadingText}>Loading pelajaran...</Text>
+          </PlanoraCard>
         ) : null}
 
         {!isLoading && subjects.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No subjects yet</Text>
+          <PlanoraCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Belum ada pelajaran</Text>
             <Text style={styles.emptyText}>
-              Add your first class here and we’ll use it as the anchor for the rest of the app.
+              Tambahkan pelajaran pertama untuk menyalakan todo, jadwal, dan flashcard.
             </Text>
-          </View>
+          </PlanoraCard>
         ) : null}
 
-        {subjects.map((subject, index) => (
-          <View key={subject.id} style={styles.subjectCard}>
-            <View style={styles.subjectMain}>
-              <View style={[styles.subjectBadge, { backgroundColor: subject.color }]} />
-              <View style={styles.subjectText}>
-                <Text style={styles.subjectTitle}>{subject.name}</Text>
-                <Text style={styles.subjectMeta}>Subject {index + 1}</Text>
-              </View>
+        {subjectTiles.map((subject) => (
+          <PlanoraCard key={subject.id} style={styles.subjectCard}>
+            <View style={[styles.subjectOrb, { backgroundColor: `${subject.color}22` }]}>
+              <Text style={styles.subjectEmoji}>{subject.emoji}</Text>
             </View>
 
-            <Pressable onPress={() => onDeleteSubject(subject.id, subject.name)}>
-              <Text style={styles.deleteLabel}>Delete</Text>
-            </Pressable>
-          </View>
+            <View style={styles.subjectBody}>
+              <Text style={styles.subjectName}>{subject.name}</Text>
+              <Text style={styles.subjectMeta}>Siap dipakai buat belajar</Text>
+            </View>
+
+            <Text onPress={() => onDeleteSubject(subject.id, subject.name)} style={styles.deleteText}>
+              Hapus
+            </Text>
+          </PlanoraCard>
         ))}
+
+        {isComposerOpen ? (
+          <PlanoraCard style={styles.formCard}>
+            <Text style={styles.formTitle}>Tambah pelajaran</Text>
+            <Text style={styles.formText}>
+              Pilih warna identitas lalu isi nama pelajaran sesuai struktur belajarmu.
+            </Text>
+
+            <PlanoraInput
+              placeholder="Judul pelajaran"
+              value={name}
+              onChangeText={setName}
+            />
+
+            <View style={styles.colorRow}>
+              {SUBJECT_COLORS.map((color) => (
+                <View key={color} style={styles.colorChipWrap}>
+                  <PlanoraFilterPill
+                    active={selectedColor === color}
+                    label=""
+                    onPress={() => setSelectedColor(color)}
+                    stretch={false}
+                  />
+                  <View style={[styles.colorDot, { backgroundColor: color }]} />
+                </View>
+              ))}
+            </View>
+          </PlanoraCard>
+        ) : null}
+
+        <PlanoraPrimaryButton
+          fullWidth
+          label={isComposerOpen ? (isSaving ? 'Menyimpan...' : 'Simpan pelajaran') : 'Tambah pelajaran'}
+          onPress={isComposerOpen ? onCreateSubject : () => setIsComposerOpen(true)}
+        />
       </View>
     </ScrollView>
   );
@@ -164,130 +192,109 @@ export default function SubjectsScreen() {
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
+    backgroundColor: planoraColors.void0,
   },
   content: {
-    padding: 24,
-    gap: 20,
+    paddingBottom: 36,
   },
-  header: {
-    gap: 8,
+  sectionWrap: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    gap: 16,
   },
-  eyebrow: {
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: '#2563EB',
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    opacity: 0.75,
-  },
-  formCard: {
-    borderRadius: 24,
-    padding: 18,
-    gap: 14,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-  },
-  paletteRow: {
+  loadingCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    backgroundColor: 'transparent',
-  },
-  colorChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
-  },
-  colorChipSelected: {
-    borderWidth: 3,
-    borderColor: '#0F172A',
-  },
-  primaryButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 16,
     alignItems: 'center',
-    paddingVertical: 14,
+    gap: 10,
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  listSection: {
-    gap: 12,
+  loadingText: {
+    color: planoraColors.aurora500,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   emptyCard: {
-    padding: 18,
-    borderRadius: 20,
-    gap: 8,
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(37,99,235,0.08)',
+    gap: 10,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
   },
   emptyText: {
+    color: planoraColors.void800,
     fontSize: 14,
     lineHeight: 20,
-    opacity: 0.75,
   },
   subjectCard: {
-    borderRadius: 20,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(15,23,42,0.04)',
-  },
-  subjectMain: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'transparent',
+  },
+  subjectOrb: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subjectEmoji: {
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  subjectBody: {
     flex: 1,
-  },
-  subjectBadge: {
-    width: 14,
-    height: 54,
-    borderRadius: 999,
-  },
-  subjectText: {
     gap: 4,
-    backgroundColor: 'transparent',
-    flex: 1,
   },
-  subjectTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+  subjectName: {
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
   },
   subjectMeta: {
-    fontSize: 13,
-    opacity: 0.65,
+    color: planoraColors.void800,
+    fontSize: 12,
+    lineHeight: 16,
   },
-  deleteLabel: {
-    color: '#DC2626',
+  deleteText: {
+    color: planoraColors.danger500,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  formCard: {
+    gap: 12,
+  },
+  formTitle: {
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  formText: {
+    color: planoraColors.void800,
     fontSize: 14,
-    fontWeight: '700',
+    lineHeight: 20,
+  },
+  colorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  colorChipWrap: {
+    position: 'relative',
+  },
+  colorDot: {
+    position: 'absolute',
+    left: 14,
+    top: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
   },
 });

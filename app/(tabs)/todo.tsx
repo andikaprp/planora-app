@@ -1,42 +1,88 @@
-import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { router } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Text, View } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
+import {
+  PlanoraCard,
+  PlanoraDashboardHero,
+  PlanoraFilterPill,
+  PlanoraInput,
+  PlanoraPrimaryButton,
+  PlanoraSectionTitle,
+  PlanoraTodoCard,
+  planoraColors,
+  planoraDisplayName,
+  planoraHeadingFont,
+} from '@/src/components/planora-ui';
+import { useAuth } from '@/src/features/auth/AuthProvider';
+import { useFlashcards } from '@/src/features/flashcards/useFlashcards';
 import { useSubjects } from '@/src/features/subjects/useSubjects';
 import { useTodos } from '@/src/features/todos/useTodos';
+import { confirmDestructive } from '@/src/lib/confirm';
 import type { TodoRecord } from '@/src/lib/database';
 
+type TodoFilter = 'active' | 'completed' | 'overdue';
+
 const PRIORITIES: TodoRecord['priority'][] = ['high', 'medium', 'low'];
+const PRIORITY_LABELS: Record<TodoRecord['priority'], string> = {
+  high: 'Tinggi',
+  medium: 'Sedang',
+  low: 'Rendah',
+};
 
 export default function TodoScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { session } = useAuth();
   const { subjects, isLoading: subjectsLoading } = useSubjects();
-  const { todos, isLoading: todosLoading, addTodo, toggleTodo, removeTodo } = useTodos();
+  const { cards, decks } = useFlashcards();
+  const { todos, isLoading: todosLoading, addTodo, removeTodo, toggleTodo } = useTodos();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
-  const [priority, setPriority] = useState<TodoRecord['priority']>('medium');
+  const [composerSubjectId, setComposerSubjectId] = useState<string | null>(null);
+  const [todoFilter, setTodoFilter] = useState<TodoFilter>('active');
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [dueAt, setDueAt] = useState('');
+  const [priority, setPriority] = useState<TodoRecord['priority']>('medium');
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!selectedSubjectId && subjects.length > 0) {
-      setSelectedSubjectId(subjects[0].id);
+    if (!composerSubjectId && subjects.length > 0) {
+      setComposerSubjectId(subjects[0].id);
     }
-  }, [selectedSubjectId, subjects]);
+  }, [composerSubjectId, subjects]);
+
+  const displayName = planoraDisplayName(session?.user.email);
+  const selectedSubject =
+    subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
+  const heroCards = selectedSubject
+    ? cards.filter((card) => card.subjectId === selectedSubject.id)
+    : cards;
+  const heroDeck = selectedSubject
+    ? decks.find((deck) => deck.subjectId === selectedSubject.id) ?? null
+    : decks[0] ?? null;
+  const heroCard = heroCards[0] ?? cards[0] ?? null;
+
+  const filteredTodos = useMemo(() => {
+    return todos.filter((todo) => {
+      if (selectedSubjectId && todo.subjectId !== selectedSubjectId) {
+        return false;
+      }
+
+      if (todoFilter === 'completed') {
+        return Boolean(todo.completedAt);
+      }
+
+      if (todoFilter === 'overdue') {
+        return !todo.completedAt && Boolean(todo.dueAt);
+      }
+
+      return !todo.completedAt;
+    });
+  }, [selectedSubjectId, todoFilter, todos]);
 
   async function onCreateTodo() {
-    if (!selectedSubjectId || !title.trim()) {
+    if (!composerSubjectId || !title.trim()) {
       return;
     }
 
@@ -47,14 +93,14 @@ export default function TodoScreen() {
         dueAt,
         notes,
         priority,
-        subjectId: selectedSubjectId,
+        subjectId: composerSubjectId,
         title,
       });
-
       setTitle('');
       setNotes('');
       setDueAt('');
       setPriority('medium');
+      setIsComposerOpen(false);
     } catch (error) {
       Alert.alert('Could not save to-do', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -62,236 +108,196 @@ export default function TodoScreen() {
     }
   }
 
-  function onDeleteTodo(id: string, todoTitle: string) {
-    Alert.alert('Delete to-do?', `Remove "${todoTitle}" from your task list?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await removeTodo(id);
-          } catch (error) {
-            Alert.alert(
-              'Could not delete to-do',
-              error instanceof Error ? error.message : 'Unknown error'
-            );
-          }
-        },
-      },
-    ]);
+  async function onDeleteTodo(id: string, todoTitle: string) {
+    const confirmed = await confirmDestructive({
+      title: 'Hapus to-do?',
+      message: `"${todoTitle}" akan dihapus dari daftar tugas kamu.`,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await removeTodo(id);
+    } catch (error) {
+      Alert.alert('Could not delete to-do', error instanceof Error ? error.message : 'Unknown error');
+    }
   }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>To-do</Text>
-        <Text style={styles.title}>Plan the work that matters</Text>
-        <Text style={styles.subtitle}>
-          Capture assignments, attach them to a subject, and mark them off as you finish.
-        </Text>
-      </View>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <PlanoraDashboardHero
+        actionLabel="Atur flashcard"
+        actionSecondaryLabel="Buka kartu"
+        cardCounter={heroDeck ? `1/${Math.max(heroDeck.cardCount, 1)}` : '0/0'}
+        cardWord={heroCard?.front ?? '1 + 1'}
+        selectedSubjectId={selectedSubjectId}
+        subjectLabel={selectedSubject?.name ?? 'Matematika'}
+        subjects={subjects}
+        title={'Mau belajar apa\nhari ini?'}
+        userName={displayName}
+        onActionPress={() => router.push('/(tabs)/flashcards')}
+        onCardPress={() => router.push('/(tabs)/flashcards')}
+        onSelectSubject={setSelectedSubjectId}
+      />
 
-      <View
-        style={[
-          styles.formCard,
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)' },
-        ]}>
-        <Text style={styles.sectionTitle}>Create a task</Text>
-
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Example: Finish chemistry worksheet"
-          placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-          style={[
-            styles.input,
-            {
-              color: isDark ? '#FFFFFF' : '#0F172A',
-              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-            },
-          ]}
+      <View style={styles.sectionWrap}>
+        <PlanoraSectionTitle
+          title="To-Do list"
+          actionLabel={isComposerOpen ? 'Tutup' : 'Ubah'}
+          onActionPress={() => setIsComposerOpen((value) => !value)}
         />
 
-        <TextInput
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Notes (optional)"
-          placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-          multiline
-          style={[
-            styles.input,
-            styles.notesInput,
-            {
-              color: isDark ? '#FFFFFF' : '#0F172A',
-              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-            },
-          ]}
-        />
-
-        <TextInput
-          value={dueAt}
-          onChangeText={setDueAt}
-          placeholder="Due date or reminder (optional)"
-          placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-          style={[
-            styles.input,
-            {
-              color: isDark ? '#FFFFFF' : '#0F172A',
-              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-            },
-          ]}
-        />
-
-        <View style={styles.inlineSection}>
-          <Text style={styles.fieldLabel}>Subject</Text>
-          <View style={styles.chipRow}>
-            {subjects.map((subject) => {
-              const isSelected = selectedSubjectId === subject.id;
-
-              return (
-                <Pressable
-                  key={subject.id}
-                  onPress={() => setSelectedSubjectId(subject.id)}
-                  style={[
-                    styles.subjectChip,
-                    { borderColor: subject.color },
-                    isSelected && { backgroundColor: subject.color },
-                  ]}>
-                  <Text
-                    style={[
-                      styles.subjectChipText,
-                      { color: isSelected ? '#FFFFFF' : subject.color },
-                    ]}>
-                    {subject.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        <View style={styles.filterRow}>
+          <PlanoraFilterPill
+            active={todoFilter === 'active'}
+            label="Aktif"
+            onPress={() => setTodoFilter('active')}
+          />
+          <PlanoraFilterPill
+            active={todoFilter === 'overdue'}
+            label="Terlewati"
+            onPress={() => setTodoFilter('overdue')}
+          />
+          <PlanoraFilterPill
+            active={todoFilter === 'completed'}
+            label="Selesai"
+            onPress={() => setTodoFilter('completed')}
+          />
         </View>
 
-        <View style={styles.inlineSection}>
-          <Text style={styles.fieldLabel}>Priority</Text>
-          <View style={styles.chipRow}>
-            {PRIORITIES.map((level) => {
-              const isSelected = priority === level;
-
-              return (
-                <Pressable
-                  key={level}
-                  onPress={() => setPriority(level)}
-                  style={[styles.priorityChip, isSelected && styles.priorityChipSelected]}>
-                  <Text style={[styles.priorityText, isSelected && styles.priorityTextSelected]}>
-                    {level[0].toUpperCase() + level.slice(1)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <Pressable
-          style={[
-            styles.primaryButton,
-            (!selectedSubjectId || !title.trim() || isSaving) && styles.buttonDisabled,
-          ]}
-          disabled={!selectedSubjectId || !title.trim() || isSaving}
-          onPress={onCreateTodo}>
-          <Text style={styles.primaryButtonText}>
-            {isSaving ? 'Saving to-do...' : 'Create to-do'}
-          </Text>
-        </Pressable>
-      </View>
-
-      {subjectsLoading ? (
-        <View style={styles.emptyCard}>
-          <ActivityIndicator size="small" color="#2563EB" />
-          <Text style={styles.emptyText}>Loading subjects...</Text>
-        </View>
-      ) : null}
-
-      {!subjectsLoading && subjects.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Create a subject first</Text>
-          <Text style={styles.emptyText}>
-            To-dos in Planora belong to a subject, so start in the Subjects tab and add one class.
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.listSection}>
-        <Text style={styles.sectionTitle}>Your tasks</Text>
-
-        {todosLoading ? (
-          <View style={styles.emptyCard}>
-            <ActivityIndicator size="small" color="#2563EB" />
-            <Text style={styles.emptyText}>Loading tasks...</Text>
-          </View>
+        {subjectsLoading || todosLoading ? (
+          <PlanoraCard style={styles.loadingCard}>
+            <ActivityIndicator size="small" color={planoraColors.aurora500} />
+            <Text style={styles.loadingText}>Loading to-do...</Text>
+          </PlanoraCard>
         ) : null}
 
-        {!todosLoading && todos.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No tasks yet</Text>
+        {!subjectsLoading && subjects.length === 0 ? (
+          <PlanoraCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Bikin pelajaran dulu</Text>
             <Text style={styles.emptyText}>
-              Add your first assignment here and we’ll use it as the base for schedule and study flows.
+              To-do Planora selalu nempel ke pelajaran, jadi mulai dari tab Pelajaran dulu.
             </Text>
-          </View>
+            <PlanoraPrimaryButton
+              fullWidth
+              icon={null}
+              label="Buka pelajaran"
+              onPress={() => router.push('/(tabs)/subjects')}
+            />
+          </PlanoraCard>
         ) : null}
 
-        {todos.map((todo) => {
+        {isComposerOpen && subjects.length > 0 ? (
+          <PlanoraCard style={styles.formCard}>
+            <Text style={styles.formTitle}>Tambah to-do</Text>
+            <Text style={styles.formText}>
+              Isi detail tugas di bawah untuk menaruhnya ke alur kerja Planora.
+            </Text>
+
+            <PlanoraInput placeholder="Judul tugas" value={title} onChangeText={setTitle} />
+            <PlanoraInput
+              multiline
+              placeholder="Deskripsi singkat"
+              value={notes}
+              onChangeText={setNotes}
+            />
+
+            <Text style={styles.fieldLabel}>Pelajaran</Text>
+            <View style={styles.choiceRow}>
+              {subjects.map((subject) => {
+                const isSelected = composerSubjectId === subject.id;
+                return (
+                  <PlanoraFilterPill
+                    key={subject.id}
+                    active={isSelected}
+                    label={subject.name}
+                    onPress={() => setComposerSubjectId(subject.id)}
+                    stretch={false}
+                  />
+                );
+              })}
+            </View>
+
+            <Text style={styles.fieldLabel}>Prioritas</Text>
+            <View style={styles.choiceRow}>
+              {PRIORITIES.map((value) => (
+                <PlanoraFilterPill
+                  key={value}
+                  active={priority === value}
+                  label={PRIORITY_LABELS[value]}
+                  onPress={() => setPriority(value)}
+                  stretch={false}
+                />
+              ))}
+            </View>
+
+            <PlanoraInput
+              placeholder="Tanggal / jam deadline"
+              value={dueAt}
+              onChangeText={setDueAt}
+            />
+          </PlanoraCard>
+        ) : null}
+
+        {!todosLoading && filteredTodos.length === 0 && subjects.length > 0 ? (
+          <PlanoraCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Belum ada to-do di filter ini</Text>
+            <Text style={styles.emptyText}>
+              Ganti filternya atau tambahkan tugas baru untuk mulai mengisi layar ini.
+            </Text>
+          </PlanoraCard>
+        ) : null}
+
+        {filteredTodos.map((todo) => {
           const isCompleted = Boolean(todo.completedAt);
+          const metaColor = isCompleted
+            ? planoraColors.void700
+            : todo.priority === 'high'
+              ? planoraColors.danger500
+              : todo.priority === 'medium'
+                ? planoraColors.tangerine400
+                : planoraColors.void700;
+          const borderColor = isCompleted
+            ? planoraColors.void200
+            : todo.priority === 'high'
+              ? planoraColors.danger500
+              : todo.priority === 'medium'
+                ? planoraColors.tangerine400
+                : undefined;
+          const emoji = isCompleted ? '✓' : todo.priority === 'high' ? '❤️' : todo.priority === 'medium' ? '😭' : '🙂';
 
           return (
-            <View key={todo.id} style={[styles.todoCard, isCompleted && styles.todoCardCompleted]}>
-              <View style={styles.todoMain}>
-                <Pressable
-                  style={[styles.checkbox, isCompleted && styles.checkboxCompleted]}
-                  onPress={async () => {
-                    try {
-                      await toggleTodo(todo.id, isCompleted);
-                    } catch (error) {
-                      Alert.alert(
-                        'Could not update to-do',
-                        error instanceof Error ? error.message : 'Unknown error'
-                      );
-                    }
-                  }}>
-                  <Text style={styles.checkboxLabel}>{isCompleted ? '✓' : ''}</Text>
-                </Pressable>
-
-                <View style={styles.todoText}>
-                  <Text style={[styles.todoTitle, isCompleted && styles.todoTitleCompleted]}>
-                    {todo.title}
+            <PlanoraTodoCard
+              key={todo.id}
+              borderColor={borderColor}
+              checked={isCompleted}
+              description={todo.notes}
+              emoji={emoji}
+              meta={`${todo.subjectName} | ${todo.dueAt ?? 'Belum dijadwalkan'}`}
+              metaColor={metaColor}
+              onPress={() => toggleTodo(todo.id, isCompleted)}
+              onTogglePress={() => toggleTodo(todo.id, isCompleted)}
+              title={todo.title}
+              trailing={
+                isComposerOpen ? (
+                  <Text onPress={() => onDeleteTodo(todo.id, todo.title)} style={styles.deleteText}>
+                    Hapus
                   </Text>
-                  <View style={styles.metaRow}>
-                    <View style={[styles.subjectDot, { backgroundColor: todo.subjectColor }]} />
-                    <Text style={styles.metaText}>{todo.subjectName}</Text>
-                    <Text style={styles.metaText}>•</Text>
-                    <Text style={styles.metaText}>{todo.priority}</Text>
-                    {todo.dueAt ? (
-                      <>
-                        <Text style={styles.metaText}>•</Text>
-                        <Text style={styles.metaText}>{todo.dueAt}</Text>
-                      </>
-                    ) : null}
-                  </View>
-                  {todo.notes ? <Text style={styles.notesText}>{todo.notes}</Text> : null}
-                </View>
-              </View>
-
-              <Pressable onPress={() => onDeleteTodo(todo.id, todo.title)}>
-                <Text style={styles.deleteLabel}>Delete</Text>
-              </Pressable>
-            </View>
+                ) : null
+              }
+            />
           );
         })}
+
+        {subjects.length > 0 ? (
+          <PlanoraPrimaryButton
+            fullWidth
+            label={isComposerOpen ? (isSaving ? 'Menyimpan...' : 'Simpan to-do') : 'Tambah to-do'}
+            onPress={isComposerOpen ? onCreateTodo : () => setIsComposerOpen(true)}
+          />
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -300,193 +306,76 @@ export default function TodoScreen() {
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
+    backgroundColor: planoraColors.void0,
   },
   content: {
-    padding: 24,
-    gap: 20,
+    paddingBottom: 36,
   },
-  header: {
+  sectionWrap: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    gap: 16,
+  },
+  filterRow: {
+    flexDirection: 'row',
     gap: 8,
   },
-  eyebrow: {
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: '#2563EB',
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    opacity: 0.75,
-  },
-  formCard: {
-    borderRadius: 24,
-    padding: 18,
-    gap: 14,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-  },
-  notesInput: {
-    minHeight: 92,
-    textAlignVertical: 'top',
-  },
-  inlineSection: {
-    gap: 10,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    opacity: 0.75,
-  },
-  chipRow: {
+  loadingCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    backgroundColor: 'transparent',
-  },
-  subjectChip: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  subjectChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  priorityChip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(15,23,42,0.08)',
-  },
-  priorityChipSelected: {
-    backgroundColor: '#0F172A',
-  },
-  priorityText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  priorityTextSelected: {
-    color: '#FFFFFF',
-  },
-  primaryButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 16,
     alignItems: 'center',
-    paddingVertical: 14,
+    gap: 10,
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  listSection: {
-    gap: 12,
+  loadingText: {
+    color: planoraColors.aurora500,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   emptyCard: {
-    padding: 18,
-    borderRadius: 20,
-    gap: 8,
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(37,99,235,0.08)',
+    gap: 10,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
   },
   emptyText: {
+    color: planoraColors.void800,
     fontSize: 14,
     lineHeight: 20,
-    opacity: 0.75,
   },
-  todoCard: {
-    borderRadius: 20,
-    padding: 16,
-    gap: 14,
-    backgroundColor: 'rgba(15,23,42,0.04)',
-  },
-  todoCardCompleted: {
-    opacity: 0.65,
-  },
-  todoMain: {
-    flexDirection: 'row',
+  formCard: {
     gap: 12,
-    backgroundColor: 'transparent',
   },
-  checkbox: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: '#2563EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
+  formTitle: {
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
   },
-  checkboxCompleted: {
-    backgroundColor: '#2563EB',
-  },
-  checkboxLabel: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  todoText: {
-    flex: 1,
-    gap: 6,
-    backgroundColor: 'transparent',
-  },
-  todoTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  todoTitleCompleted: {
-    textDecorationLine: 'line-through',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'transparent',
-    flexWrap: 'wrap',
-  },
-  metaText: {
-    fontSize: 13,
-    opacity: 0.7,
-  },
-  subjectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-  },
-  notesText: {
+  formText: {
+    color: planoraColors.void800,
     fontSize: 14,
     lineHeight: 20,
-    opacity: 0.78,
   },
-  deleteLabel: {
-    color: '#DC2626',
-    fontSize: 14,
-    fontWeight: '700',
-    alignSelf: 'flex-end',
+  fieldLabel: {
+    color: planoraColors.void1000,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  deleteText: {
+    color: planoraColors.danger500,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
   },
 });

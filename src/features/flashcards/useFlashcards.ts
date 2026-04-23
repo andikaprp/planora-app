@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSQLiteContext } from 'expo-sqlite';
+
+import { useAppDatabase } from '@/src/lib/db';
 
 type FlashcardDeckSummary = {
   cardCount: number;
@@ -27,7 +28,7 @@ function makeId(prefix: string) {
 }
 
 export function useFlashcards() {
-  const db = useSQLiteContext();
+  const db = useAppDatabase();
   const [decks, setDecks] = useState<FlashcardDeckSummary[]>([]);
   const [cards, setCards] = useState<FlashcardItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);

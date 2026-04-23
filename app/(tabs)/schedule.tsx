@@ -1,57 +1,83 @@
+import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Text, View } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
+import {
+  PlanoraCard,
+  PlanoraDashboardHero,
+  PlanoraFilterPill,
+  PlanoraInput,
+  PlanoraPrimaryButton,
+  PlanoraSectionTitle,
+  planoraColors,
+  planoraDisplayName,
+  planoraHeadingFont,
+} from '@/src/components/planora-ui';
+import { useAuth } from '@/src/features/auth/AuthProvider';
+import { useFlashcards } from '@/src/features/flashcards/useFlashcards';
 import { useTimetable } from '@/src/features/schedule/useTimetable';
 import { useSubjects } from '@/src/features/subjects/useSubjects';
+import { confirmDestructive } from '@/src/lib/confirm';
 
 const WEEK_DAYS = [
-  { label: 'Mon', value: 1, title: 'Monday' },
-  { label: 'Tue', value: 2, title: 'Tuesday' },
-  { label: 'Wed', value: 3, title: 'Wednesday' },
-  { label: 'Thu', value: 4, title: 'Thursday' },
-  { label: 'Fri', value: 5, title: 'Friday' },
-  { label: 'Sat', value: 6, title: 'Saturday' },
-  { label: 'Sun', value: 0, title: 'Sunday' },
+  { label: 'Min', title: 'Minggu', value: 0 },
+  { label: 'Sen', title: 'Senin', value: 1 },
+  { label: 'Sel', title: 'Selasa', value: 2 },
+  { label: 'Rab', title: 'Rabu', value: 3 },
+  { label: 'Kam', title: 'Kamis', value: 4 },
+  { label: 'Jum', title: 'Jumat', value: 5 },
+  { label: 'Sab', title: 'Sabtu', value: 6 },
 ];
 
 export default function ScheduleScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { session } = useAuth();
   const { subjects, isLoading: subjectsLoading } = useSubjects();
+  const { cards, decks } = useFlashcards();
   const { slots, isLoading: slotsLoading, addSlot, removeSlot } = useTimetable();
 
-  const [dayOfWeek, setDayOfWeek] = useState(1);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [composerSubjectId, setComposerSubjectId] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState(1);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!selectedSubjectId && subjects.length > 0) {
-      setSelectedSubjectId(subjects[0].id);
+    if (!composerSubjectId && subjects.length > 0) {
+      setComposerSubjectId(subjects[0].id);
     }
-  }, [selectedSubjectId, subjects]);
+  }, [composerSubjectId, subjects]);
 
-  const groupedSlots = useMemo(() => {
-    return WEEK_DAYS.map((day) => ({
-      ...day,
-      slots: slots.filter((slot) => slot.dayOfWeek === day.value),
-    }));
-  }, [slots]);
+  const displayName = planoraDisplayName(session?.user.email);
+  const selectedSubject =
+    subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
+  const heroCards = selectedSubject
+    ? cards.filter((card) => card.subjectId === selectedSubject.id)
+    : cards;
+  const heroDeck = selectedSubject
+    ? decks.find((deck) => deck.subjectId === selectedSubject.id) ?? null
+    : decks[0] ?? null;
+  const heroCard = heroCards[0] ?? cards[0] ?? null;
+
+  const visibleSlots = useMemo(() => {
+    return slots.filter((slot) => {
+      if (slot.dayOfWeek !== selectedDay) {
+        return false;
+      }
+
+      if (selectedSubjectId && slot.subjectId !== selectedSubjectId) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [selectedDay, selectedSubjectId, slots]);
 
   async function onCreateSlot() {
-    if (!selectedSubjectId || !startTime.trim() || !endTime.trim()) {
+    if (!composerSubjectId || !startTime.trim() || !endTime.trim()) {
       return;
     }
 
@@ -59,248 +85,192 @@ export default function ScheduleScreen() {
 
     try {
       await addSlot({
-        dayOfWeek,
+        dayOfWeek: selectedDay,
         endTime,
         location,
         notes,
         startTime,
-        subjectId: selectedSubjectId,
+        subjectId: composerSubjectId,
       });
-
       setStartTime('');
       setEndTime('');
       setLocation('');
       setNotes('');
+      setIsComposerOpen(false);
     } catch (error) {
-      Alert.alert('Could not save slot', error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert('Could not save schedule', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsSaving(false);
     }
   }
 
-  function onDeleteSlot(id: string, subjectName: string, dayTitle: string) {
-    Alert.alert('Delete slot?', `Remove ${subjectName} from ${dayTitle}'s timetable?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await removeSlot(id);
-          } catch (error) {
-            Alert.alert(
-              'Could not delete slot',
-              error instanceof Error ? error.message : 'Unknown error'
-            );
-          }
-        },
-      },
-    ]);
+  async function onDeleteSlot(id: string, title: string) {
+    const confirmed = await confirmDestructive({
+      title: 'Hapus jadwal?',
+      message: `Jadwal "${title}" akan dihapus dari hari ini.`,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await removeSlot(id);
+    } catch (error) {
+      Alert.alert('Could not delete schedule', error instanceof Error ? error.message : 'Unknown error');
+    }
   }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>Schedule</Text>
-        <Text style={styles.title}>Build your weekly timetable</Text>
-        <Text style={styles.subtitle}>
-          Add recurring study sessions or class blocks for each subject so the week feels planned.
-        </Text>
-      </View>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <PlanoraDashboardHero
+        actionLabel="Atur flashcard"
+        actionSecondaryLabel="Buka kartu"
+        cardCounter={heroDeck ? `1/${Math.max(heroDeck.cardCount, 1)}` : '0/0'}
+        cardWord={heroCard?.front ?? 'Jadwal belajar tersusun rapi.'}
+        selectedSubjectId={selectedSubjectId}
+        subjectLabel={selectedSubject?.name ?? 'Belum ada pelajaran'}
+        subjects={subjects}
+        title={'Mau belajar apa\nhari ini?'}
+        userName={displayName}
+        onActionPress={() => router.push('/(tabs)/flashcards')}
+        onCardPress={() => router.push('/(tabs)/flashcards')}
+        onSelectSubject={setSelectedSubjectId}
+      />
 
-      <View
-        style={[
-          styles.formCard,
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)' },
-        ]}>
-        <Text style={styles.sectionTitle}>Add a time block</Text>
-
-        <View style={styles.inlineSection}>
-          <Text style={styles.fieldLabel}>Day</Text>
-          <View style={styles.chipRow}>
-            {WEEK_DAYS.map((day) => {
-              const isSelected = day.value === dayOfWeek;
-
-              return (
-                <Pressable
-                  key={day.label}
-                  onPress={() => setDayOfWeek(day.value)}
-                  style={[styles.dayChip, isSelected && styles.dayChipSelected]}>
-                  <Text style={[styles.dayChipText, isSelected && styles.dayChipTextSelected]}>
-                    {day.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.timeRow}>
-          <TextInput
-            value={startTime}
-            onChangeText={setStartTime}
-            placeholder="Start (09:00)"
-            placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-            style={[
-              styles.input,
-              styles.halfInput,
-              {
-                color: isDark ? '#FFFFFF' : '#0F172A',
-                borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-              },
-            ]}
-          />
-          <TextInput
-            value={endTime}
-            onChangeText={setEndTime}
-            placeholder="End (10:30)"
-            placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-            style={[
-              styles.input,
-              styles.halfInput,
-              {
-                color: isDark ? '#FFFFFF' : '#0F172A',
-                borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-              },
-            ]}
-          />
-        </View>
-
-        <View style={styles.inlineSection}>
-          <Text style={styles.fieldLabel}>Subject</Text>
-          <View style={styles.chipRow}>
-            {subjects.map((subject) => {
-              const isSelected = selectedSubjectId === subject.id;
-
-              return (
-                <Pressable
-                  key={subject.id}
-                  onPress={() => setSelectedSubjectId(subject.id)}
-                  style={[
-                    styles.subjectChip,
-                    { borderColor: subject.color },
-                    isSelected && { backgroundColor: subject.color },
-                  ]}>
-                  <Text
-                    style={[
-                      styles.subjectChipText,
-                      { color: isSelected ? '#FFFFFF' : subject.color },
-                    ]}>
-                    {subject.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <TextInput
-          value={location}
-          onChangeText={setLocation}
-          placeholder="Location (optional)"
-          placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-          style={[
-            styles.input,
-            {
-              color: isDark ? '#FFFFFF' : '#0F172A',
-              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-            },
-          ]}
+      <View style={styles.sectionWrap}>
+        <PlanoraSectionTitle
+          title="Jadwal"
+          actionLabel={isComposerOpen ? 'Tutup' : 'Ubah'}
+          onActionPress={() => setIsComposerOpen((value) => !value)}
         />
 
-        <TextInput
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Notes (optional)"
-          placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.4)'}
-          multiline
-          style={[
-            styles.input,
-            styles.notesInput,
-            {
-              color: isDark ? '#FFFFFF' : '#0F172A',
-              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-            },
-          ]}
-        />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dayRow}>
+          {WEEK_DAYS.map((day) => (
+            <PlanoraFilterPill
+              key={day.value}
+              active={selectedDay === day.value}
+              label={`${day.label} ${slots.filter((slot) => slot.dayOfWeek === day.value).length}`}
+              onPress={() => setSelectedDay(day.value)}
+              stretch={false}
+            />
+          ))}
+        </ScrollView>
 
-        <Pressable
-          style={[
-            styles.primaryButton,
-            (!selectedSubjectId || !startTime.trim() || !endTime.trim() || isSaving) &&
-              styles.buttonDisabled,
-          ]}
-          disabled={!selectedSubjectId || !startTime.trim() || !endTime.trim() || isSaving}
-          onPress={onCreateSlot}>
-          <Text style={styles.primaryButtonText}>
-            {isSaving ? 'Saving block...' : 'Create time block'}
-          </Text>
-        </Pressable>
-      </View>
-
-      {subjectsLoading ? (
-        <View style={styles.emptyCard}>
-          <ActivityIndicator size="small" color="#2563EB" />
-          <Text style={styles.emptyText}>Loading subjects...</Text>
-        </View>
-      ) : null}
-
-      {!subjectsLoading && subjects.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Create a subject first</Text>
-          <Text style={styles.emptyText}>
-            Schedule blocks belong to a subject, so add one in the Subjects tab first.
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.listSection}>
-        <Text style={styles.sectionTitle}>Weekly view</Text>
-
-        {slotsLoading ? (
-          <View style={styles.emptyCard}>
-            <ActivityIndicator size="small" color="#2563EB" />
-            <Text style={styles.emptyText}>Loading timetable...</Text>
-          </View>
+        {subjectsLoading || slotsLoading ? (
+          <PlanoraCard style={styles.loadingCard}>
+            <ActivityIndicator size="small" color={planoraColors.aurora500} />
+            <Text style={styles.loadingText}>Loading jadwal...</Text>
+          </PlanoraCard>
         ) : null}
 
-        {!slotsLoading &&
-          groupedSlots.map((day) => (
-            <View key={day.title} style={styles.daySection}>
-              <Text style={styles.dayTitle}>{day.title}</Text>
-              {day.slots.length === 0 ? (
-                <View style={styles.dayEmpty}>
-                  <Text style={styles.dayEmptyText}>No blocks planned yet.</Text>
-                </View>
-              ) : (
-                day.slots.map((slot) => (
-                  <View key={slot.id} style={styles.slotCard}>
-                    <View style={styles.slotMain}>
-                      <View style={[styles.slotBadge, { backgroundColor: slot.subjectColor }]} />
-                      <View style={styles.slotText}>
-                        <Text style={styles.slotTitle}>{slot.subjectName}</Text>
-                        <Text style={styles.slotMeta}>
-                          {slot.startTime} - {slot.endTime}
-                          {slot.location ? ` • ${slot.location}` : ''}
-                        </Text>
-                        {slot.notes ? <Text style={styles.slotNotes}>{slot.notes}</Text> : null}
-                      </View>
-                    </View>
-                    <Pressable onPress={() => onDeleteSlot(slot.id, slot.subjectName, day.title)}>
-                      <Text style={styles.deleteLabel}>Delete</Text>
-                    </Pressable>
-                  </View>
-                ))
-              )}
+        {!subjectsLoading && subjects.length === 0 ? (
+          <PlanoraCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Bikin pelajaran dulu</Text>
+            <Text style={styles.emptyText}>
+              Jadwal perlu pelajaran sebagai anchor, jadi mulai dari tab Pelajaran dulu.
+            </Text>
+            <PlanoraPrimaryButton
+              fullWidth
+              icon={null}
+              label="Buka pelajaran"
+              onPress={() => router.push('/(tabs)/subjects')}
+            />
+          </PlanoraCard>
+        ) : null}
+
+        {isComposerOpen && subjects.length > 0 ? (
+          <PlanoraCard style={styles.formCard}>
+            <Text style={styles.formTitle}>Tambah jadwal</Text>
+            <Text style={styles.formText}>
+              Pakai komposer ini untuk menaruh sesi belajar ke hari yang sedang aktif.
+            </Text>
+
+            <Text style={styles.fieldLabel}>Pelajaran</Text>
+            <View style={styles.choiceRow}>
+              {subjects.map((subject) => (
+                <PlanoraFilterPill
+                  key={subject.id}
+                  active={composerSubjectId === subject.id}
+                  label={subject.name}
+                  onPress={() => setComposerSubjectId(subject.id)}
+                  stretch={false}
+                />
+              ))}
             </View>
-          ))}
+
+            <View style={styles.timeRow}>
+              <PlanoraInput
+                placeholder="Jam mulai"
+                value={startTime}
+                onChangeText={setStartTime}
+                style={styles.timeInput}
+              />
+              <PlanoraInput
+                placeholder="Jam selesai"
+                value={endTime}
+                onChangeText={setEndTime}
+                style={styles.timeInput}
+              />
+            </View>
+
+            <PlanoraInput
+              placeholder="Lokasi / guru"
+              value={location}
+              onChangeText={setLocation}
+            />
+            <PlanoraInput
+              multiline
+              placeholder="Catatan tambahan"
+              value={notes}
+              onChangeText={setNotes}
+            />
+          </PlanoraCard>
+        ) : null}
+
+        {!slotsLoading && visibleSlots.length === 0 && subjects.length > 0 ? (
+          <PlanoraCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>
+              Belum ada jadwal {WEEK_DAYS.find((day) => day.value === selectedDay)?.title}
+            </Text>
+            <Text style={styles.emptyText}>
+              Tambahkan satu sesi belajar untuk mengisi hari ini.
+            </Text>
+          </PlanoraCard>
+        ) : null}
+
+        {visibleSlots.map((slot) => (
+          <PlanoraCard key={slot.id} style={styles.slotCard}>
+            <View style={styles.slotTimeBlock}>
+              <Text style={styles.slotTime}>{slot.startTime}</Text>
+              <Text style={styles.slotTimeDivider}>-</Text>
+              <Text style={styles.slotTime}>{slot.endTime}</Text>
+            </View>
+
+            <View style={styles.slotBody}>
+              <Text style={styles.slotTitle}>{slot.subjectName}</Text>
+              <Text style={styles.slotMeta}>
+                {slot.location?.trim() ? slot.location : 'Sesi belajar Planora'}
+              </Text>
+              {slot.notes ? <Text style={styles.slotNotes}>{slot.notes}</Text> : null}
+            </View>
+
+            <Text onPress={() => onDeleteSlot(slot.id, slot.subjectName)} style={styles.deleteText}>
+              Hapus
+            </Text>
+          </PlanoraCard>
+        ))}
+
+        {subjects.length > 0 ? (
+          <PlanoraPrimaryButton
+            fullWidth
+            label={isComposerOpen ? (isSaving ? 'Menyimpan...' : 'Simpan jadwal') : 'Tambah jadwal'}
+            onPress={isComposerOpen ? onCreateSlot : () => setIsComposerOpen(true)}
+          />
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -309,185 +279,129 @@ export default function ScheduleScreen() {
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
+    backgroundColor: planoraColors.void0,
   },
   content: {
-    padding: 24,
-    gap: 20,
+    paddingBottom: 36,
   },
-  header: {
+  sectionWrap: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    gap: 16,
+  },
+  dayRow: {
     gap: 8,
+    paddingRight: 12,
   },
-  eyebrow: {
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: '#2563EB',
+  loadingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
+  loadingText: {
+    color: planoraColors.aurora500,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
   },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    opacity: 0.75,
+  emptyCard: {
+    gap: 10,
+  },
+  emptyTitle: {
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  emptyText: {
+    color: planoraColors.void800,
+    fontSize: 14,
+    lineHeight: 20,
   },
   formCard: {
-    borderRadius: 24,
-    padding: 18,
-    gap: 14,
+    gap: 12,
   },
-  sectionTitle: {
+  formTitle: {
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
     fontSize: 18,
-    fontWeight: '800',
+    lineHeight: 24,
+    fontWeight: '600',
   },
-  inlineSection: {
-    gap: 10,
+  formText: {
+    color: planoraColors.void800,
+    fontSize: 14,
+    lineHeight: 20,
   },
   fieldLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    opacity: 0.75,
+    color: planoraColors.void1000,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
   },
-  chipRow: {
+  choiceRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    backgroundColor: 'transparent',
-  },
-  dayChip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(15,23,42,0.08)',
-  },
-  dayChipSelected: {
-    backgroundColor: '#0F172A',
-  },
-  dayChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  dayChipTextSelected: {
-    color: '#FFFFFF',
+    gap: 8,
   },
   timeRow: {
     flexDirection: 'row',
-    gap: 12,
-    backgroundColor: 'transparent',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-  },
-  halfInput: {
-    flex: 1,
-  },
-  notesInput: {
-    minHeight: 92,
-    textAlignVertical: 'top',
-  },
-  subjectChip: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  subjectChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  primaryButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 16,
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  listSection: {
-    gap: 14,
-  },
-  emptyCard: {
-    padding: 18,
-    borderRadius: 20,
-    gap: 8,
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(37,99,235,0.08)',
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  emptyText: {
-    fontSize: 14,
-    lineHeight: 20,
-    opacity: 0.75,
-  },
-  daySection: {
     gap: 10,
   },
-  dayTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  dayEmpty: {
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(15,23,42,0.04)',
-  },
-  dayEmptyText: {
-    fontSize: 14,
-    opacity: 0.7,
+  timeInput: {
+    flex: 1,
   },
   slotCard: {
-    borderRadius: 20,
-    padding: 16,
-    gap: 14,
-    backgroundColor: 'rgba(15,23,42,0.04)',
-  },
-  slotMain: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: 'transparent',
   },
-  slotBadge: {
-    width: 12,
-    borderRadius: 999,
+  slotTimeBlock: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: planoraColors.aurora50,
+    alignItems: 'center',
+    gap: 2,
   },
-  slotText: {
+  slotTime: {
+    color: planoraColors.aurora600,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  slotTimeDivider: {
+    color: planoraColors.void700,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  slotBody: {
     flex: 1,
     gap: 4,
-    backgroundColor: 'transparent',
   },
   slotTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    color: planoraColors.void1000,
+    fontFamily: planoraHeadingFont,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600',
   },
   slotMeta: {
-    fontSize: 13,
-    opacity: 0.72,
+    color: planoraColors.aurora600,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
   },
   slotNotes: {
-    fontSize: 14,
-    lineHeight: 20,
-    opacity: 0.78,
+    color: planoraColors.void800,
+    fontSize: 12,
+    lineHeight: 16,
   },
-  deleteLabel: {
-    color: '#DC2626',
-    fontSize: 14,
-    fontWeight: '700',
-    alignSelf: 'flex-end',
+  deleteText: {
+    color: planoraColors.danger500,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
   },
 });

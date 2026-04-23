@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { AppDatabase } from '@/src/lib/db';
 
 export type SubjectRecord = {
   id: string;
@@ -51,7 +51,7 @@ export type FlashcardRecord = {
   updatedAt: string;
 };
 
-export async function initializeDatabase(db: SQLiteDatabase) {
+export async function initializeDatabase(db: AppDatabase) {
   await db.execAsync(`
     PRAGMA foreign_keys = ON;
     PRAGMA journal_mode = WAL;

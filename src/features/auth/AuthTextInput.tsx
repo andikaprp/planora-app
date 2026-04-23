@@ -1,42 +1,34 @@
-import { useMemo } from 'react';
-import { StyleSheet, TextInput, TextInputProps, View } from 'react-native';
+import { StyleSheet, TextInput, type TextInputProps } from 'react-native';
 
-import { useColorScheme } from '@/components/useColorScheme';
+import { planoraColors } from '@/src/components/planora-ui';
 
 export function AuthTextInput(props: TextInputProps) {
-  const scheme = useColorScheme();
-  const styles = useMemo(() => makeStyles(scheme === 'dark'), [scheme]);
   return (
-    <View style={styles.wrapper}>
-      <TextInput
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholderTextColor={styles.placeholder.color}
-        {...props}
-        style={[styles.input, props.style]}
-      />
-    </View>
+    <TextInput
+      autoCapitalize="none"
+      autoCorrect={false}
+      placeholderTextColor={planoraColors.void700}
+      {...props}
+      style={[styles.input, props.multiline && styles.inputMultiline, props.style]}
+    />
   );
 }
 
-const makeStyles = (dark: boolean) =>
-  StyleSheet.create({
-    wrapper: {
-      width: '100%',
-    },
-    input: {
-      width: '100%',
-      borderWidth: 1,
-      borderColor: dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)',
-      backgroundColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 16,
-      color: dark ? 'white' : 'black',
-    },
-    placeholder: {
-      color: dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)',
-    },
-  });
-
+const styles = StyleSheet.create({
+  input: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(30, 30, 30, 0.12)',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    fontSize: 15,
+    lineHeight: 20,
+    color: planoraColors.void1000,
+  },
+  inputMultiline: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+});

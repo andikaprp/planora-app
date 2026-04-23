@@ -1,7 +1,6 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { SQLiteProvider } from 'expo-sqlite';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -9,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider } from '@/src/features/auth/AuthProvider';
+import { DatabaseProvider } from '@/src/lib/db';
 import { initializeDatabase } from '@/src/lib/database';
 
 export {
@@ -52,7 +52,7 @@ function RootLayoutNav() {
 
   return (
     <AuthProvider>
-      <SQLiteProvider databaseName="planora.db" onInit={initializeDatabase}>
+      <DatabaseProvider databaseName="planora.db" onInit={initializeDatabase}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
             <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -61,7 +61,7 @@ function RootLayoutNav() {
             <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
           </Stack>
         </ThemeProvider>
-      </SQLiteProvider>
+      </DatabaseProvider>
     </AuthProvider>
   );
 }
