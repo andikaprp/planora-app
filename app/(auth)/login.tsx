@@ -6,19 +6,28 @@ import { router } from 'expo-router';
 import { Text, View } from '@/components/Themed';
 import { supabase } from '@/src/lib/supabase';
 import { AuthTextInput } from '@/src/features/auth/AuthTextInput';
+import { useAuth } from '@/src/features/auth/AuthProvider';
 
 export default function LoginScreen() {
+  const { isSupabaseConfigured } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function onLogin() {
     if (!email || !password) return;
+    if (!supabase) {
+      Alert.alert(
+        'Supabase not configured',
+        'Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to continue.',
+      );
+      return;
+    }
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/home');
     } catch (e) {
       Alert.alert('Login failed', e instanceof Error ? e.message : 'Unknown error');
     } finally {
@@ -30,6 +39,15 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Welcome back</Text>
       <Text style={styles.subtitle}>Log in to continue.</Text>
+
+      {!isSupabaseConfigured ? (
+        <View style={styles.noticeCard}>
+          <Text style={styles.noticeTitle}>Auth is not ready yet</Text>
+          <Text style={styles.noticeText}>
+            Fill in the Supabase values from `.env.example` before trying to sign in.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.form}>
         <AuthTextInput
@@ -45,8 +63,11 @@ export default function LoginScreen() {
           onChangeText={setPassword}
         />
         <Pressable
-          style={[styles.primaryButton, (loading || !email || !password) && styles.primaryDisabled]}
-          disabled={loading || !email || !password}
+          style={[
+            styles.primaryButton,
+            (loading || !email || !password || !isSupabaseConfigured) && styles.primaryDisabled,
+          ]}
+          disabled={loading || !email || !password || !isSupabaseConfigured}
           onPress={onLogin}>
           <Text style={styles.primaryButtonText}>{loading ? 'Logging in…' : 'Log in'}</Text>
         </Pressable>
@@ -78,6 +99,22 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 12,
   },
+  noticeCard: {
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245,158,11,0.1)',
+    gap: 4,
+  },
+  noticeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  noticeText: {
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.8,
+  },
   primaryButton: {
     backgroundColor: '#3B82F6',
     paddingVertical: 14,
@@ -100,4 +137,3 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 });
-

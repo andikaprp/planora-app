@@ -33,6 +33,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="subjects"
+        options={{
+          title: 'Subjects',
+          tabBarIcon: ({ color }) => <TabBarIcon name="book" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="todo"
         options={{
           title: 'To-do',
@@ -44,13 +51,6 @@ export default function TabLayout() {
         options={{
           title: 'Schedule',
           tabBarIcon: ({ color }) => <TabBarIcon name="calendar" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="flashcards"
-        options={{
-          title: 'Cards',
-          tabBarIcon: ({ color }) => <TabBarIcon name="clone" color={color} />,
         }}
       />
       <Tabs.Screen
