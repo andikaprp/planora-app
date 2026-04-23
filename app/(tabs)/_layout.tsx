@@ -4,6 +4,7 @@ import { PlanoraTabBar } from '@/src/components/planora-ui';
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="todo"
       screenOptions={{
         headerShown: false,
       }}
@@ -11,6 +12,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="home"
         options={{
+          href: null,
           title: 'Home',
         }}
       />
@@ -35,6 +37,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          href: null,
           title: 'Profil',
         }}
       />

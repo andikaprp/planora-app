@@ -1,7 +1,6 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
 import {
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
+import { planoraFontFamily } from '@/src/lib/planora-fonts';
 
 export const planoraColors = {
   aurora50: '#F2FAF6',
@@ -31,11 +31,9 @@ export const planoraColors = {
   danger500: '#FF0000',
 };
 
-export const planoraHeadingFont = Platform.select({
-  ios: 'Georgia',
-  android: 'serif',
-  default: 'serif',
-});
+export const planoraHeadingFont = planoraFontFamily.heading;
+export const planoraBodyFont = planoraFontFamily.body;
+export const planoraBodySemiFont = planoraFontFamily.bodySemi;
 
 export function planoraDisplayName(email?: string | null) {
   if (!email) {
@@ -78,15 +76,33 @@ export function PlanoraLogoMark({
   );
 }
 
-export function PlanoraProfilePill({ name }: { name: string }) {
-  return (
-    <View style={styles.profilePill}>
+export function PlanoraProfilePill({
+  name,
+  onPress,
+}: {
+  name: string;
+  onPress?: () => void;
+}) {
+  const content = (
+    <>
       <View style={styles.profileIcon}>
         <FontAwesome name="user-o" size={11} color={planoraColors.void700} />
       </View>
       <Text style={styles.profileName}>{name}</Text>
-    </View>
+    </>
   );
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.profilePill, pressed && { opacity: 0.88 }]}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return <View style={styles.profilePill}>{content}</View>;
 }
 
 export function PlanoraCard({
@@ -117,6 +133,7 @@ export function PlanoraPrimaryButton({
   fullWidth,
   icon = 'plus',
   variant = 'solid',
+  heroCta = false,
 }: {
   label: string;
   onPress?: () => void;
@@ -125,6 +142,8 @@ export function PlanoraPrimaryButton({
   fullWidth?: boolean;
   icon?: React.ComponentProps<typeof FontAwesome>['name'] | null;
   variant?: 'outline' | 'soft' | 'solid';
+  /** Capsule CTA on green hero (Figma: Atur flashcard) */
+  heroCta?: boolean;
 }) {
   const variantStyle =
     variant === 'outline'
@@ -148,14 +167,26 @@ export function PlanoraPrimaryButton({
       style={[
         styles.primaryButton,
         compact && styles.primaryButtonCompact,
+        heroCta && styles.primaryButtonHeroCta,
         fullWidth && styles.primaryButtonFullWidth,
         variantStyle,
         disabled && styles.primaryButtonDisabled,
       ]}>
-      <Text style={[styles.primaryButtonText, compact && styles.primaryButtonTextCompact, variantTextStyle]}>
+      <Text
+        style={[
+          styles.primaryButtonText,
+          (compact || heroCta) && styles.primaryButtonTextCompact,
+          variantTextStyle,
+        ]}>
         {label}
       </Text>
-      {icon ? <FontAwesome name={icon} size={compact ? 12 : 14} color={iconColor} /> : null}
+      {icon ? (
+        <FontAwesome
+          name={icon}
+          size={heroCta ? 10 : compact ? 12 : 14}
+          color={iconColor}
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -236,6 +267,7 @@ type DashboardHeroProps = {
   onActionPress?: () => void;
   onCardPress?: () => void;
   onSelectSubject?: (subjectId: string | null) => void;
+  onProfilePress?: () => void;
 };
 
 export function PlanoraDashboardHero({
@@ -253,6 +285,7 @@ export function PlanoraDashboardHero({
   onActionPress,
   onCardPress,
   onSelectSubject,
+  onProfilePress,
 }: DashboardHeroProps) {
   return (
     <View style={styles.heroCard}>
@@ -262,7 +295,7 @@ export function PlanoraDashboardHero({
 
       <View style={styles.heroHeader}>
         <PlanoraLogoMark tone="light" />
-        <PlanoraProfilePill name={userName} />
+        <PlanoraProfilePill name={userName} onPress={onProfilePress} />
       </View>
 
       <Text style={styles.heroTitle}>{title}</Text>
@@ -314,7 +347,7 @@ export function PlanoraDashboardHero({
         </Pressable>
       </View>
 
-      <PlanoraPrimaryButton label={actionLabel} onPress={onActionPress} />
+      <PlanoraPrimaryButton heroCta label={actionLabel} onPress={onActionPress} />
     </View>
   );
 }
@@ -334,7 +367,7 @@ export function PlanoraTodoCard({
   emoji: string;
   title: string;
   description?: string | null;
-  meta: string;
+  meta: string | ReactNode;
   metaColor?: string;
   borderColor?: string;
   checked?: boolean;
@@ -358,7 +391,11 @@ export function PlanoraTodoCard({
       <Pressable disabled={!onPress} onPress={onPress} style={styles.todoCardBody}>
         <Text style={styles.todoCardTitle}>{title}</Text>
         {description ? <Text style={styles.todoCardDescription}>{description}</Text> : null}
-        <Text style={[styles.todoCardMeta, metaColor ? { color: metaColor } : null]}>{meta}</Text>
+        {typeof meta === 'string' ? (
+          <Text style={[styles.todoCardMeta, metaColor ? { color: metaColor } : null]}>{meta}</Text>
+        ) : (
+          meta
+        )}
       </Pressable>
 
       <View style={styles.todoCardTrailing}>
@@ -413,20 +450,20 @@ export function PlanoraTabBar({ state, descriptors, navigation }: any) {
     string,
     { icon: React.ComponentProps<typeof FontAwesome>['name']; label: string }
   > = {
-    home: { icon: 'home', label: 'Home' },
     todo: { icon: 'check-square', label: 'To-do' },
     schedule: { icon: 'calendar', label: 'Jadwal' },
     subjects: { icon: 'book', label: 'Pelajaran' },
-    profile: { icon: 'user-o', label: 'Profil' },
   };
 
-  const visibleRoutes = state.routes.filter((route: any) => tabMeta[route.name]);
+  const tabOrder: string[] = ['todo', 'schedule', 'subjects'];
+  const visibleRoutes = state.routes
+    .filter((route: any) => tabMeta[route.name])
+    .sort(
+      (a: any, b: any) => tabOrder.indexOf(a.name) - tabOrder.indexOf(b.name)
+    );
 
   function navigateTo(routeName: string) {
     switch (routeName) {
-      case 'home':
-        router.navigate('/(tabs)/home');
-        break;
       case 'todo':
         router.navigate('/(tabs)/todo');
         break;
@@ -436,22 +473,24 @@ export function PlanoraTabBar({ state, descriptors, navigation }: any) {
       case 'subjects':
         router.navigate('/(tabs)/subjects');
         break;
-      case 'profile':
-        router.navigate('/(tabs)/profile');
-        break;
       default:
         break;
     }
   }
 
   return (
-    <View style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View
+      style={[
+        styles.tabBarWrap,
+        { paddingBottom: Math.max(insets.bottom, 6), paddingTop: 2 },
+      ]}>
       <View style={styles.tabBar}>
         {visibleRoutes.map((route: any) => {
           const descriptor = descriptors[route.key];
           const index = state.routes.findIndex((candidate: any) => candidate.key === route.key);
           const isFocused = state.index === index;
           const meta = tabMeta[route.name];
+          const iconSize = isFocused ? 30 : 22;
 
           return (
             <Pressable
@@ -467,12 +506,15 @@ export function PlanoraTabBar({ state, descriptors, navigation }: any) {
                   navigateTo(route.name);
                 }
               }}
-              style={styles.tabItem}>
-              {isFocused ? <View style={styles.tabItemIndicator} /> : null}
+              style={[
+                styles.tabItem,
+                isFocused && styles.tabItemActive,
+                route.name === 'todo' && isFocused && styles.tabItemToDoIcon,
+              ]}>
               <View style={styles.tabIconWrap}>
                 <FontAwesome
                   name={meta.icon}
-                  size={26}
+                  size={iconSize}
                   color={isFocused ? planoraColors.aurora500 : planoraColors.void800}
                 />
               </View>
@@ -510,10 +552,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: planoraColors.void0,
     shadowColor: planoraColors.void0,
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
+    elevation: 3,
   },
   profileIcon: {
     width: 24,
@@ -521,12 +563,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
   profileName: {
     color: planoraColors.void1000,
     fontSize: 12,
-    fontWeight: '600',
+    lineHeight: 16,
+    fontFamily: planoraBodySemiFont,
   },
   card: {
     borderRadius: 16,
@@ -548,6 +591,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: planoraColors.void1000,
     backgroundColor: 'rgba(0,0,0,0.03)',
+    fontFamily: planoraBodyFont,
   },
   inputMultiline: {
     minHeight: 96,
@@ -565,6 +609,14 @@ const styles = StyleSheet.create({
   primaryButtonCompact: {
     paddingVertical: 10,
     paddingHorizontal: 18,
+  },
+  primaryButtonHeroCta: {
+    alignSelf: 'center',
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingLeft: 20,
+    paddingRight: 16,
+    gap: 4,
   },
   primaryButtonFullWidth: {
     alignSelf: 'stretch',
@@ -586,7 +638,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: '600',
+    fontFamily: planoraBodySemiFont,
   },
   primaryButtonTextCompact: {
     fontSize: 14,
@@ -632,7 +684,7 @@ const styles = StyleSheet.create({
   filterPillText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '600',
+    fontFamily: planoraBodySemiFont,
   },
   filterPillTextHero: {
     color: planoraColors.void0,
@@ -657,7 +709,6 @@ const styles = StyleSheet.create({
     fontFamily: planoraHeadingFont,
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '600',
   },
   sectionActionPill: {
     minHeight: 24,
@@ -671,44 +722,49 @@ const styles = StyleSheet.create({
     color: planoraColors.aurora600,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '600',
+    fontFamily: planoraBodySemiFont,
   },
   heroCard: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 12,
     borderRadius: 24,
     overflow: 'hidden',
     paddingHorizontal: 16,
-    paddingTop: 40,
-    paddingBottom: 24,
-    backgroundColor: '#4A906E',
+    paddingTop: 36,
+    paddingBottom: 20,
+    backgroundColor: planoraColors.aurora600,
   },
+  /** Layered conic + blur approximates Figma "Aurora Green" background */
   heroBlurLarge: {
     position: 'absolute',
-    width: 430,
-    height: 430,
-    borderRadius: 215,
-    backgroundColor: 'rgba(229, 244, 237, 0.68)',
-    top: 170,
-    left: -70,
+    width: 400,
+    height: 500,
+    borderRadius: 24,
+    top: '50%',
+    left: '50%',
+    marginTop: -420,
+    marginLeft: -200,
+    transform: [{ translateY: 6 }],
+    backgroundColor: 'rgba(229, 244, 237, 0.32)',
   },
   heroBlurSmall: {
     position: 'absolute',
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    backgroundColor: 'rgba(191, 228, 211, 0.4)',
-    top: -28,
-    right: -12,
+    width: 220,
+    height: 280,
+    borderRadius: 20,
+    top: 8,
+    right: -20,
+    backgroundColor: 'rgba(110, 180, 148, 0.22)',
   },
   heroBlurDark: {
     position: 'absolute',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: 'rgba(27, 100, 71, 0.18)',
-    bottom: -110,
-    right: -60,
+    width: 280,
+    height: 260,
+    borderRadius: 24,
+    bottom: -80,
+    left: '50%',
+    marginLeft: -140,
+    backgroundColor: 'rgba(27, 100, 71, 0.35)',
   },
   heroHeader: {
     flexDirection: 'row',
@@ -721,8 +777,7 @@ const styles = StyleSheet.create({
     color: planoraColors.void0,
     fontFamily: planoraHeadingFont,
     fontSize: 28,
-    lineHeight: 38,
-    fontWeight: '600',
+    lineHeight: 36,
     textAlign: 'center',
   },
   heroChipRow: {
@@ -775,6 +830,7 @@ const styles = StyleSheet.create({
     color: planoraColors.void700,
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: planoraBodyFont,
   },
   heroDeckCenter: {
     flex: 1,
@@ -788,7 +844,6 @@ const styles = StyleSheet.create({
     fontFamily: planoraHeadingFont,
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '600',
     textAlign: 'center',
   },
   heroDeckFooter: {
@@ -801,12 +856,13 @@ const styles = StyleSheet.create({
     color: planoraColors.void700,
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: planoraBodyFont,
   },
   heroDeckAction: {
     color: planoraColors.aurora500,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '600',
+    fontFamily: planoraBodySemiFont,
   },
   todoCard: {
     flexDirection: 'row',
@@ -833,18 +889,18 @@ const styles = StyleSheet.create({
     fontFamily: planoraHeadingFont,
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: '600',
   },
   todoCardDescription: {
     color: planoraColors.void1000,
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: planoraBodyFont,
   },
   todoCardMeta: {
     color: planoraColors.void700,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '600',
+    fontFamily: planoraBodyFont,
   },
   todoCardTrailing: {
     minHeight: 24,
@@ -900,14 +956,12 @@ const styles = StyleSheet.create({
     fontFamily: planoraHeadingFont,
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '600',
   },
   authTitle: {
     color: planoraColors.void1000,
     fontFamily: planoraHeadingFont,
     fontSize: 30,
     lineHeight: 38,
-    fontWeight: '600',
     textAlign: 'center',
   },
   authSubtitle: {
@@ -915,6 +969,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
+    fontFamily: planoraBodyFont,
   },
   authCard: {
     gap: 14,
@@ -924,35 +979,33 @@ const styles = StyleSheet.create({
   },
   tabBarWrap: {
     backgroundColor: planoraColors.void0,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(30, 30, 30, 0.05)',
     shadowColor: '#000000',
     shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 8,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 4,
   },
   tabBar: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
   tabItem: {
-    position: 'relative',
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 14,
-    paddingBottom: 8,
+    paddingTop: 12,
+    paddingBottom: 10,
+    paddingHorizontal: 24,
     gap: 8,
   },
-  tabItemIndicator: {
-    position: 'absolute',
-    left: 8,
-    right: 8,
-    top: 0,
-    height: 2,
-    borderRadius: 999,
-    backgroundColor: planoraColors.aurora500,
+  tabItemActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: planoraColors.aurora500,
+  },
+  /** To-do tab uses a larger mark in Figma */
+  tabItemToDoIcon: {
+    paddingTop: 8,
   },
   tabIconWrap: {
     minHeight: 32,
@@ -963,9 +1016,10 @@ const styles = StyleSheet.create({
     color: planoraColors.void800,
     fontSize: 14,
     lineHeight: 18,
+    fontFamily: planoraBodyFont,
   },
   tabLabelActive: {
     color: planoraColors.aurora500,
-    fontWeight: '600',
+    fontFamily: planoraBodySemiFont,
   },
 });

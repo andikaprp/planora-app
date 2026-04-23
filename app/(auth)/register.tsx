@@ -50,7 +50,7 @@ export default function RegisterScreen() {
       }
 
       if (data.session) {
-        router.replace('/(tabs)/home');
+        router.replace('/(tabs)/todo');
         return;
       }
 

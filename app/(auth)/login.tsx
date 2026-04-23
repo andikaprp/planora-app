@@ -38,7 +38,7 @@ export default function LoginScreen() {
         throw error;
       }
 
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/todo');
     } catch (error) {
       Alert.alert('Login failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
