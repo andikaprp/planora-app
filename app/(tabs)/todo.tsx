@@ -10,6 +10,8 @@ import {
   PlanoraPrimaryButton,
   PlanoraSectionTitle,
   PlanoraTodoCard,
+  planoraBodyFont,
+  planoraBodySemiFont,
   planoraColors,
   planoraDisplayName,
   planoraHeadingFont,
@@ -125,6 +127,55 @@ export default function TodoScreen() {
     }
   }
 
+  function formatTodoMeta(
+    subjectName: string,
+    when: string,
+    tone: 'danger' | 'tangerine' | 'neutral'
+  ) {
+    if (tone === 'danger') {
+      return (
+        <Text
+          style={{
+            fontSize: 12,
+            lineHeight: 16,
+            fontFamily: planoraBodyFont,
+            color: planoraColors.danger500,
+          }}>
+          <Text style={{ fontFamily: planoraBodySemiFont }}>{subjectName}</Text>
+          {` | ${when}`}
+        </Text>
+      );
+    }
+    if (tone === 'tangerine') {
+      return (
+        <Text
+          style={{
+            fontSize: 12,
+            lineHeight: 16,
+            fontFamily: planoraBodyFont,
+            color: planoraColors.tangerine400,
+          }}>
+          <Text style={{ fontFamily: planoraBodySemiFont }}>{subjectName}</Text>
+          {` | ${when}`}
+        </Text>
+      );
+    }
+    return (
+      <Text
+        style={{
+          fontSize: 12,
+          lineHeight: 16,
+          fontFamily: planoraBodyFont,
+          color: planoraColors.void700,
+        }}>
+        <Text style={{ color: planoraColors.void1000, fontFamily: planoraBodySemiFont }}>
+          {subjectName}
+        </Text>
+        {` | ${when}`}
+      </Text>
+    );
+  }
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <PlanoraDashboardHero
@@ -140,6 +191,7 @@ export default function TodoScreen() {
         onActionPress={() => router.push('/(tabs)/flashcards')}
         onCardPress={() => router.push('/(tabs)/flashcards')}
         onSelectSubject={setSelectedSubjectId}
+        onProfilePress={() => router.push('/(tabs)/profile')}
       />
 
       <View style={styles.sectionWrap}>
@@ -252,13 +304,6 @@ export default function TodoScreen() {
 
         {filteredTodos.map((todo) => {
           const isCompleted = Boolean(todo.completedAt);
-          const metaColor = isCompleted
-            ? planoraColors.void700
-            : todo.priority === 'high'
-              ? planoraColors.danger500
-              : todo.priority === 'medium'
-                ? planoraColors.tangerine400
-                : planoraColors.void700;
           const borderColor = isCompleted
             ? planoraColors.void200
             : todo.priority === 'high'
@@ -267,6 +312,14 @@ export default function TodoScreen() {
                 ? planoraColors.tangerine400
                 : undefined;
           const emoji = isCompleted ? '✓' : todo.priority === 'high' ? '❤️' : todo.priority === 'medium' ? '😭' : '🙂';
+          const when = todo.dueAt ?? 'Belum dijadwalkan';
+          const metaTone: 'danger' | 'tangerine' | 'neutral' = isCompleted
+            ? 'neutral'
+            : todo.priority === 'high'
+              ? 'danger'
+              : todo.priority === 'medium'
+                ? 'tangerine'
+                : 'neutral';
 
           return (
             <PlanoraTodoCard
@@ -275,8 +328,7 @@ export default function TodoScreen() {
               checked={isCompleted}
               description={todo.notes}
               emoji={emoji}
-              meta={`${todo.subjectName} | ${todo.dueAt ?? 'Belum dijadwalkan'}`}
-              metaColor={metaColor}
+              meta={formatTodoMeta(todo.subjectName, when, metaTone)}
               onPress={() => toggleTodo(todo.id, isCompleted)}
               onTogglePress={() => toggleTodo(todo.id, isCompleted)}
               title={todo.title}
@@ -365,7 +417,7 @@ const styles = StyleSheet.create({
     color: planoraColors.void1000,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '600',
+    fontFamily: planoraBodySemiFont,
   },
   choiceRow: {
     flexDirection: 'row',

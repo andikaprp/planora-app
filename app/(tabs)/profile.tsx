@@ -24,7 +24,7 @@ type MenuRow = {
 };
 
 export default function ProfileScreen() {
-  const { isSupabaseConfigured, session } = useAuth();
+  const { exitPreview, isAuthPreview, isSupabaseConfigured, session } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const displayName = planoraDisplayName(session?.user.email);
@@ -34,6 +34,16 @@ export default function ProfileScreen() {
     Alert.alert(title, 'Flow ini belum disambungkan penuh ke backend, tapi layout baru sudah siap.');
 
   async function onLogout() {
+    if (isAuthPreview) {
+      setLoading(true);
+      try {
+        await exitPreview();
+        router.replace('/(auth)/login');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (!supabase) {
       Alert.alert(
         'Supabase not configured',

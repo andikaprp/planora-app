@@ -12,20 +12,37 @@ import { useAuth } from '@/src/features/auth/AuthProvider';
 import { supabase } from '@/src/lib/supabase';
 
 export default function RegisterScreen() {
-  const { isSupabaseConfigured } = useAuth();
+  const { enterPreview, isSupabaseConfigured } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const canPreviewLocal = !isSupabaseConfigured;
 
   const isFormValid =
-    Boolean(email) &&
-    password.length >= 8 &&
-    confirmPassword.length >= 8 &&
-    password === confirmPassword &&
-    isSupabaseConfigured;
+    canPreviewLocal ||
+    (Boolean(email) &&
+      password.length >= 8 &&
+      confirmPassword.length >= 8 &&
+      password === confirmPassword &&
+      isSupabaseConfigured);
+
+  async function onPreview() {
+    setPreviewLoading(true);
+    try {
+      await enterPreview();
+      router.replace('/(tabs)/todo');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   async function onRegister() {
+    if (canPreviewLocal) {
+      await onPreview();
+      return;
+    }
     if (!isFormValid) {
       if (password !== confirmPassword) {
         Alert.alert('Password belum sama', 'Cek lagi password dan konfirmasi password kamu.');
@@ -50,7 +67,7 @@ export default function RegisterScreen() {
       }
 
       if (data.session) {
-        router.replace('/(tabs)/home');
+        router.replace('/(tabs)/todo');
         return;
       }
 
@@ -86,11 +103,11 @@ export default function RegisterScreen() {
         onChangeText={setConfirmPassword}
       />
 
-      {!isSupabaseConfigured ? (
+      {canPreviewLocal ? (
         <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>Auth belum aktif</Text>
+          <Text style={styles.noticeTitle}>Mode preview lokal</Text>
           <Text style={styles.noticeText}>
-            Isi `EXPO_PUBLIC_SUPABASE_URL` dan `EXPO_PUBLIC_SUPABASE_ANON_KEY` dulu.
+            Tanpa Supabase, pilih Lanjut untuk buka app dengan data lokal.
           </Text>
         </View>
       ) : null}
@@ -100,10 +117,18 @@ export default function RegisterScreen() {
       ) : null}
 
       <PlanoraPrimaryButton
-        disabled={!isFormValid || loading}
+        disabled={!isFormValid || loading || previewLoading}
         fullWidth
         icon={null}
-        label={loading ? 'Mendaftarkan...' : 'Daftar'}
+        label={
+          canPreviewLocal
+            ? previewLoading
+              ? 'Membuka...'
+              : 'Lanjut (preview lokal)'
+            : loading
+              ? 'Mendaftarkan...'
+              : 'Daftar'
+        }
         onPress={onRegister}
       />
 

@@ -24,7 +24,7 @@ export default function IndexScreen() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  return <Redirect href="/(tabs)/home" />;
+  return <Redirect href="/(tabs)/todo" />;
 }
 
 const styles = StyleSheet.create({

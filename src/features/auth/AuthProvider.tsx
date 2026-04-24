@@ -1,38 +1,64 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 
+import {
+  createPreviewSession,
+  isAuthPreviewEnabled,
+  previewSessionStorageKey,
+} from '@/src/lib/auth-bypass';
 import { isSupabaseConfigured, supabase } from '@/src/lib/supabase';
-import { getStorageItem, setStorageItem } from '@/src/lib/storage';
+import { getStorageItem, removeStorageItem, setStorageItem } from '@/src/lib/storage';
 
 const onboardingStorageKey = 'planora.onboarding.complete';
 
 type AuthContextValue = {
   hasCompletedOnboarding: boolean;
   isAuthenticated: boolean;
+  isAuthPreview: boolean;
   isReady: boolean;
   isSupabaseConfigured: boolean;
   session: Session | null;
   completeOnboarding: () => Promise<void>;
+  enterPreview: () => Promise<void>;
+  exitPreview: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false);
-  const [session, setSession] = useState<Session | null>(null);
+  const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [previewSignedIn, setPreviewSignedIn] = useState(false);
+
+  const session: Session | null = supabaseSession
+    ? supabaseSession
+    : isAuthPreviewEnabled && previewSignedIn
+      ? createPreviewSession()
+      : null;
+
+  const isAuthPreview = Boolean(isAuthPreviewEnabled && previewSignedIn && !supabaseSession);
+  const isAuthenticated = Boolean(session);
 
   useEffect(() => {
     let isMounted = true;
 
     async function bootstrap() {
-      const onboardingValue = await getStorageItem(onboardingStorageKey);
+      const [onboardingValue, storedPreview] = await Promise.all([
+        getStorageItem(onboardingStorageKey),
+        isAuthPreviewEnabled
+          ? getStorageItem(previewSessionStorageKey)
+          : Promise.resolve(null),
+      ]);
 
       if (!isMounted) {
         return;
       }
 
       setHasCompletedOnboarding(onboardingValue === 'true');
+      if (isAuthPreviewEnabled && storedPreview === 'true') {
+        setPreviewSignedIn(true);
+      }
 
       if (!supabase) {
         setIsReady(true);
@@ -47,14 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setSession(initialSession);
+      setSupabaseSession(initialSession);
       setIsReady(true);
     }
 
     bootstrap();
 
     const authSubscription = supabase?.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
+      setSupabaseSession(nextSession);
     });
 
     return () => {
@@ -68,15 +94,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHasCompletedOnboarding(true);
   }
 
+  async function enterPreview() {
+    if (!isAuthPreviewEnabled) {
+      return;
+    }
+    await setStorageItem(previewSessionStorageKey, 'true');
+    setPreviewSignedIn(true);
+  }
+
+  async function exitPreview() {
+    if (!isAuthPreviewEnabled) {
+      return;
+    }
+    await removeStorageItem(previewSessionStorageKey);
+    setPreviewSignedIn(false);
+  }
+
   return (
     <AuthContext.Provider
       value={{
         hasCompletedOnboarding,
-        isAuthenticated: Boolean(session),
+        isAuthenticated,
+        isAuthPreview,
         isReady,
         isSupabaseConfigured,
         session,
         completeOnboarding,
+        enterPreview,
+        exitPreview,
       }}>
       {children}
     </AuthContext.Provider>

@@ -108,6 +108,7 @@ export default function SubjectsScreen() {
         onActionPress={() => router.push('/(tabs)/flashcards')}
         onCardPress={() => router.push('/(tabs)/flashcards')}
         onSelectSubject={setSelectedSubjectId}
+        onProfilePress={() => router.push('/(tabs)/profile')}
       />
 
       <View style={styles.sectionWrap}>
