@@ -12,12 +12,28 @@ import { useAuth } from '@/src/features/auth/AuthProvider';
 import { supabase } from '@/src/lib/supabase';
 
 export default function LoginScreen() {
-  const { isSupabaseConfigured } = useAuth();
+  const { enterPreview, isSupabaseConfigured } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const canPreviewLocal = !isSupabaseConfigured;
+
+  async function onPreview() {
+    setPreviewLoading(true);
+    try {
+      await enterPreview();
+      router.replace('/(tabs)/todo');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   async function onLogin() {
+    if (canPreviewLocal) {
+      await onPreview();
+      return;
+    }
     if (!email || !password) {
       return;
     }
@@ -63,20 +79,29 @@ export default function LoginScreen() {
         onChangeText={setPassword}
       />
 
-      {!isSupabaseConfigured ? (
+      {canPreviewLocal ? (
         <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>Auth belum aktif</Text>
+          <Text style={styles.noticeTitle}>Mode preview lokal</Text>
           <Text style={styles.noticeText}>
-            Isi `EXPO_PUBLIC_SUPABASE_URL` dan `EXPO_PUBLIC_SUPABASE_ANON_KEY` dulu.
+            Tanpa variabel Supabase, kamu bisa buka app dengan data lokal. Tetap isi
+            `EXPO_PUBLIC_SUPABASE_URL` dan `EXPO_PUBLIC_SUPABASE_ANON_KEY` untuk auth sungguhan.
           </Text>
         </View>
       ) : null}
 
       <PlanoraPrimaryButton
-        disabled={loading || !email || !password || !isSupabaseConfigured}
+        disabled={loading || previewLoading || (!canPreviewLocal && (!email || !password))}
         fullWidth
         icon={null}
-        label={loading ? 'Masuk...' : 'Masuk'}
+        label={
+          canPreviewLocal
+            ? previewLoading
+              ? 'Membuka...'
+              : 'Lanjut (preview lokal)'
+            : loading
+              ? 'Masuk...'
+              : 'Masuk'
+        }
         onPress={onLogin}
       />
 
