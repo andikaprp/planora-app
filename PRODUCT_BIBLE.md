@@ -1,4 +1,4 @@
-# Planora build plan
+# Product bible
 
 ## Product scope (MVP)
 - Onboarding
