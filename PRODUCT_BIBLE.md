@@ -60,3 +60,6 @@ File key: `c45JUG4Vf6JSFgmo9aXMul`
 - Local CRUD for subjects/todos/timetable/decks/cards
 - Offline mode usable (read/write queued) then sync on reconnect
 
+
+## Membership card
+- Copy: "Member of Rancana Premium" (was "Member of Rancana") for exclusivity.
