@@ -62,3 +62,6 @@ File key: `c45JUG4Vf6JSFgmo9aXMul`
 
 ## Membership card
 - Copy: "Member of Rancana Premium" (was "Member of Rancana") for exclusivity.
+
+## Achievements and badges
+- In-app achievements and badges that can be shared with others.
