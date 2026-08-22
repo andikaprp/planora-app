@@ -73,3 +73,13 @@ File key: `c45JUG4Vf6JSFgmo9aXMul`
 ## Study influencers (later)
 - Later collaboration with study influencers.
 - Add their profiles in the app so students can contact them easily to help arrange their work.
+
+## Future features (Nila take, 2026-08-22)
+- Keep: shared flashcard decks inside a group (extends shipping flashcards; study-together without a shared deck is just chat).
+- Keep: focus timer that mints a shareable badge, only if it mints from the existing live timer/widget, not a new focus mode. Badge proves a session (subject + minutes), not a sticker.
+- Last: Premium card copy ("Member of Rancana Premium") only if a shareable member card already exists. Cheap, cosmetic.
+- Later / drop: influencer profiles as a contact directory until they can drop a deck or a week plan.
+- Later / drop: generic achievement catalog not tied to a real study action (finish a deck, hit a tugas deadline, finish a timer).
+- Later / drop: group as hangout or live multiplayer. Four people sharing one deck + one tugas deadline is enough of a group.
+- Add: name what Premium unlocks (SKUs planora_premium / planora_premium_plus exist; the gate is still unnamed) before adding more Premium-only surfaces.
+- Hard part: local-first cannot do group/share without cloud. That is a V2 server decision, not a feature. Do not start group until Andika accepts some cloud.
