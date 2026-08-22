@@ -65,3 +65,7 @@ File key: `c45JUG4Vf6JSFgmo9aXMul`
 
 ## Achievements and badges
 - In-app achievements and badges that can be shared with others.
+
+## Group study mode (Premium)
+- Users can create a small study group (example: four people) and do study mode together.
+- Premium only.
