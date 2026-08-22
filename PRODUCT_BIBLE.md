@@ -69,3 +69,7 @@ File key: `c45JUG4Vf6JSFgmo9aXMul`
 ## Group study mode (Premium)
 - Users can create a small study group (example: four people) and do study mode together.
 - Premium only.
+
+## Study influencers (later)
+- Later collaboration with study influencers.
+- Add their profiles in the app so students can contact them easily to help arrange their work.
